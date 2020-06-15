@@ -68,6 +68,6 @@ pipeline {
     JOB_NAME_UNESCAPED = env.JOB_NAME.replaceAll("%2F", "/")
   }
   options {
-    timeout(time: 40, unit: 'MINUTES')
+    timeout(time: 100, unit: 'MINUTES')
   }
 }
