@@ -19,7 +19,7 @@ set -x
 OPTION=""
 if [ $# -ge 3 -a "x$3" == "xtrue" ]
 then
-  ##coverture
+  ##coverage
   OPTION="-dxdebug.coverage_enable=1 --coverage-clover ../var/test/coverage.xml"
 fi
 

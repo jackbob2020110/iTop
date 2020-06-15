@@ -3,7 +3,7 @@ pipeline {
     parameters {
         booleanParam(name: 'debugMode', defaultValue: 'false', description: 'Debug mode?')
         string(name: 'testFile', defaultValue: '', description: 'Provide test file to execute. Example: test/core/LogAPITest.php')
-        booleanParam(name: 'coverture', defaultValue: 'false', description: 'Test coverture?')
+        booleanParam(name: 'coverage', defaultValue: 'false', description: 'Test coverage?')
         booleanParam(name: 'runNonRegOQLTests', defaultValue: 'false', description: 'Do You want to run legacy OQL regression tests?')
     }
   stages {
@@ -42,7 +42,7 @@ pipeline {
       parallel {
         stage('phpunit') {
           steps {
-            sh './.jenkins/bin/tests/phpunit.sh ${debugMode} ${runNonRegOQLTests} "${coverture}" "${testFile}"'
+            sh './.jenkins/bin/tests/phpunit.sh ${debugMode} ${runNonRegOQLTests} "${coverage}" "${testFile}"'
           }
         }
       }
