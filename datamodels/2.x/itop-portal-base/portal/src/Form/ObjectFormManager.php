@@ -341,6 +341,19 @@ class ObjectFormManager extends FormManager
 		}
 
 		// Building form from its properties
+		// - Consistency checks for stimulus form
+		if (isset($this->aFormProperties['stimulus_code']))
+		{
+			$aTransitions = MetaModel::EnumTransitions($sObjectClass, $this->oObject->GetState());
+			if (!isset($aTransitions[$this->aFormProperties['stimulus_code']]))
+			{
+				$aStimuli = Metamodel::EnumStimuli($sObjectClass);
+				$sStimulusLabel = $aStimuli[$this->aFormProperties['stimulus_code']]->GetLabel();
+
+				$sExceptionMessage = Dict::Format('UI:Error:Invalid_Stimulus_On_Object_In_State', $sStimulusLabel, $this->oObject->GetName(), $this->oObject->GetStateLabel());
+				throw new Exception($sExceptionMessage);
+			}
+		}
 		// - The fields
 		switch ($this->aFormProperties['type'])
 		{
@@ -1136,7 +1149,15 @@ class ObjectFormManager extends FormManager
 
 				if ($bWasModified)
 				{
-					$aData['messages']['success'] += array('_main' => array(Dict::Format('Brick:Portal:Object:Form:Message:ObjectSaved', $this->oObject->GetName())));
+					//=if (isNew) because $bActivateTriggers = (!$this->oObject->IsNew() && $this->oObject->IsModified())
+					if(!$bActivateTriggers)
+					{
+						$aData['messages']['success'] += array(	'_main' => array(Dict::Format('UI:Title:Object_Of_Class_Created', $this->oObject->GetName(),MetaModel::GetName(get_class($this->oObject)))));
+					}
+					else
+					{
+						$aData['messages']['success'] += array('_main' => array(Dict::Format('UI:Class_Object_Updated', MetaModel::GetName(get_class($this->oObject)), $this->oObject->GetName())));
+					}
 				}
 			}
 			catch (Exception $e)

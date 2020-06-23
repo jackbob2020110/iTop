@@ -176,26 +176,32 @@ class InlineImage extends DBObject
 			$sOQL = 'SELECT InlineImage WHERE temp_id = :temp_id';
 			$oSearch = DBObjectSearch::FromOQL($sOQL);
 			$oSet = new DBObjectSet($oSearch, array(), array('temp_id' => $sTempId));
+            $aInlineImagesId = array();
 			while($oInlineImage = $oSet->Fetch())
 			{
+                $aInlineImagesId[] = $oInlineImage->GetKey();
 				$oInlineImage->SetItem($oObject);
 				$oInlineImage->Set('temp_id', '');
 				$oInlineImage->DBUpdate();
 			}
+            IssueLog::Trace('FinalizeInlineImages (see $aInlineImagesId for the id list)', 'InlineImage', array(
+                '$sObjectClass' => get_class($oObject),
+                '$sTransactionId' => $iTransactionId,
+                '$sTempId' => $sTempId,
+                '$aInlineImagesId' => $aInlineImagesId,
+                '$sUser' => UserRights::GetUser(),
+                'HTTP_REFERER' => @$_SERVER['HTTP_REFERER'],
+            ));
 		}
-// For tracing issues with Inline Images... but beware not all updates are interactive, so this trace happens when creating objects non-interactively (REST, Synchro...)
-// 		else
-//		{
-//			IssueLog::Error('InlineImage: Error during FinalizeInlineImages(), no transaction ID for object '.get_class($oObject).'#'.$oObject->GetKey().'.');
-//
-//			IssueLog::Error('|- Call stack:');
-//			$oException = new Exception();
-//			$sStackTrace = $oException->getTraceAsString();
-//			IssueLog::Error($sStackTrace);
-//
-//			IssueLog::Error('|- POST vars:');
-//			IssueLog::Error(print_r($_POST, true));
-//		}
+        else
+        {
+            IssueLog::Trace('FinalizeInlineImages "error" $iTransactionId is null', 'InlineImage', array(
+                '$sObjectClass' => get_class($oObject),
+                '$sTransactionId' => $iTransactionId,
+                '$sUser' => UserRights::GetUser(),
+                'HTTP_REFERER' => @$_SERVER['HTTP_REFERER'],
+            ));
+        }
 	}
 	
 	/**
@@ -208,10 +214,18 @@ class InlineImage extends DBObject
 		$sOQL = 'SELECT InlineImage WHERE temp_id = :temp_id';
 		$oSearch = DBObjectSearch::FromOQL($sOQL);
 		$oSet = new DBObjectSet($oSearch, array(), array('temp_id' => $sTempId));
+        $aInlineImagesId = array();
 		while($oInlineImage = $oSet->Fetch())
 		{
+            $aInlineImagesId[] = $oInlineImage->GetKey();
 			$oInlineImage->DBDelete();
 		}
+        IssueLog::Trace('OnFormCancel', 'InlineImage', array(
+            '$sTempId' => $sTempId,
+            '$aInlineImagesId' => $aInlineImagesId,
+            '$sUser' => UserRights::GetUser(),
+            'HTTP_REFERER' => @$_SERVER['HTTP_REFERER'],
+        ));
 	}
 	
 	/**
@@ -548,19 +562,72 @@ EOF
 JS
 		;
 	}
+
+    protected function AfterInsert()
+    {
+        IssueLog::Trace(__METHOD__, 'InlineImage', array(
+            'id' => $this->GetKey(),
+            'expire' => $this->Get('expire'),
+            'temp_id' => $this->Get('temp_id'),
+            'item_class' => $this->Get('item_class'),
+            'item_id' => $this->Get('item_id'),
+            'item_org_id' => $this->Get('item_org_id'),
+            'secret' => $this->Get('secret'),
+            'user' => $sUser = UserRights::GetUser(),
+            'HTTP_REFERER' => @$_SERVER['HTTP_REFERER'],
+            'REQUEST_URI' => @$_SERVER['REQUEST_URI'],
+        ));
+
+	    parent::AfterInsert();
+    }
+
+    protected function AfterUpdate()
+    {
+        IssueLog::Trace(__METHOD__, 'InlineImage', array(
+            'id' => $this->GetKey(),
+            'expire' => $this->Get('expire'),
+            'temp_id' => $this->Get('temp_id'),
+            'item_class' => $this->Get('item_class'),
+            'item_id' => $this->Get('item_id'),
+            'item_org_id' => $this->Get('item_org_id'),
+            'secret' => $this->Get('secret'),
+            'user' => $sUser = UserRights::GetUser(),
+            'HTTP_REFERER' => @$_SERVER['HTTP_REFERER'],
+            'REQUEST_URI' => @$_SERVER['REQUEST_URI'],
+        ));
+
+	    parent::AfterUpdate();
+    }
+
+    protected function AfterDelete()
+    {
+        IssueLog::Trace(__METHOD__, 'InlineImage', array(
+            'id' => $this->GetKey(),
+            'expire' => $this->Get('expire'),
+            'temp_id' => $this->Get('temp_id'),
+            'item_class' => $this->Get('item_class'),
+            'item_id' => $this->Get('item_id'),
+            'item_org_id' => $this->Get('item_org_id'),
+            'secret' => $this->Get('secret'),
+            'user' => $sUser = UserRights::GetUser(),
+            'HTTP_REFERER' => @$_SERVER['HTTP_REFERER'],
+            'REQUEST_URI' => @$_SERVER['REQUEST_URI'],
+        ));
+
+	    parent::AfterDelete();
+    }
+
 }
 
 
 /**
  * Garbage collector for cleaning "old" temporary InlineImages (and Attachments).
- * This background process runs every hour and deletes all temporary InlineImages and Attachments
- * whic are are older than one hour.
  */
 class InlineImageGC implements iBackgroundProcess
 {
     public function GetPeriodicity()
     {
-        return 1; // Runs every 8 hours
+        return 1;
     }
 
 	/**
@@ -593,6 +660,9 @@ class InlineImageGC implements iBackgroundProcess
 	}
 
 	/**
+	 * Remove $sClass instance based on their `expire` field value.
+	 * This `expire` field contains current time + draft_attachments_lifetime config parameter, it is initialized on object creation.
+	 *
 	 * @param string $sClass
 	 * @param int $iTimeLimit
 	 * @param string $sDateLimit

@@ -491,6 +491,18 @@ class utils
 
 		// Paginated selection
 		$aSelectedIds = utils::ReadParam('storedSelection', array());
+		$aSelectedObjIds = utils::ReadParam('selectObject', array());
+
+		//it means that the user has selected all the results of the search query
+		if (count($aSelectedObjIds) > 0 )
+		{
+			$sFilter=utils::ReadParam("sFilter",'',false,'raw_data');
+			if ($sFilter!='')
+			{
+				$oFullSetFilter=DBSearch::unserialize($sFilter);
+
+			}
+		}
 		if (count($aSelectedIds) > 0 )
 		{
 			if ($sSelectionMode == 'positive')
@@ -2182,7 +2194,7 @@ class utils
 	 *      * not contained in base path
 	 *    Otherwise return the real path (see realpath())
 	 *
-	 * @since 2.7.0 N°2538
+	 * @since 2.6.5 2.7.0 N°2538
 	 */
 	final public static function RealPath($sPath, $sBasePath)
 	{

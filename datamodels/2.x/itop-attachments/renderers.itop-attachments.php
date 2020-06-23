@@ -208,7 +208,7 @@ abstract class AbstractAttachmentsRenderer
 			 
 			 $('#attachment_plugin').trigger('add_attachment', [dataUpload.result.att_id, dataUpload.result.msg, false]);
 			}
-		 );
+		 )
 	}
 	
     $('#file').fileupload({

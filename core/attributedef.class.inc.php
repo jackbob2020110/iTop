@@ -7715,10 +7715,17 @@ class AttributeBlob extends AttributeDefinition
 		//	 (temporary tables created on disk)
 		//	 We will have to remove the blobs from the list of attributes when doing the select
 		//	 then the use of Get() should finalize the load
-		if ($value instanceOf ormDocument && !$value->IsEmpty())
+		if ($value instanceOf ormDocument)
 		{
 			$aValues = array();
-			$aValues[$this->GetCode().'_data'] = $value->GetData();
+			if (!$value->IsEmpty())
+			{
+				$aValues[$this->GetCode().'_data'] = $value->GetData();
+			}
+			else
+			{
+				$aValues[$this->GetCode().'_data'] = '';
+			}
 			$aValues[$this->GetCode().'_mimetype'] = $value->GetMimeType();
 			$aValues[$this->GetCode().'_filename'] = $value->GetFileName();
 		}
@@ -7936,18 +7943,6 @@ class AttributeImage extends AttributeBlob
 	public function GetEditClass()
 	{
 		return "Image";
-	}
-
-	/**
-	 * {@inheritDoc}
-	 * @see AttributeBlob::MakeRealValue()
-	 */
-	public function MakeRealValue($proposedValue, $oHostObj)
-	{
-		$oDoc = parent::MakeRealValue($proposedValue, $oHostObj);
-
-		// The validation of the MIME Type is done by CheckFormat below
-		return $oDoc;
 	}
 
 	/**
@@ -9634,7 +9629,7 @@ class AttributePropertySet extends AttributeTable
 				$sValue = '*****';
 			}
 			$sRes .= "<TR>";
-			$sCell = str_replace("\n", "<br>\n", Str::pure2html((string)$sValue));
+			$sCell = str_replace("\n", "<br>\n", Str::pure2html(@(string)$sValue));
 			$sRes .= "<TD class=\"label\">$sProperty</TD><TD>$sCell</TD>";
 			$sRes .= "</TR>";
 		}

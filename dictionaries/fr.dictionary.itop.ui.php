@@ -405,6 +405,7 @@ Dict::Add('FR FR', 'French', 'Français', array(
 	'UI:Button:Insert' => 'Insérer',
 	'UI:Button:More' => 'Plus',
 	'UI:Button:Less' => 'Moins',
+	'UI:Button:Wait' => 'Patientez pendant la mise à jour des champs',
 
 	'UI:SearchToggle' => 'Recherche',
 	'UI:ClickToCreateNew' => 'Créer un nouvel objet de type %1$s',
@@ -440,7 +441,7 @@ Dict::Add('FR FR', 'French', 'Français', array(
 	'UI:Error:BulkModifyNotAllowedOn_Class' => 'Vous n\'êtes pas autorisé à faire une modification massive sur les objets de type %1$s',
 	'UI:Error:ObjectAlreadyCloned' => 'Erreur: l\'objet a déjà été dupliqué !',
 	'UI:Error:ObjectAlreadyCreated' => 'Erreur: l\'objet a déjà été créé !',
-	'UI:Error:Invalid_Stimulus_On_Object_In_State' => 'Erreur: le stimulus "%1$s" n\'est pas valide pour l\'objet %2$s dans l\'état "%3$s".',
+	'UI:Error:Invalid_Stimulus_On_Object_In_State' => '%2$s est actuellement dans l\'état "%3$s", l\'opération "%1$s" que vous avez demandée ne peut être appliquée.',
 	'UI:Error:InvalidDashboardFile' => 'Erreur: Le fichier tableau de bord est invalide',
 	'UI:Error:InvalidDashboard' => 'Erreur: Le tableau de bord est invalide',
 	'UI:Error:MaintenanceMode' => 'L\'application est en maintenance',
@@ -1426,6 +1427,8 @@ Lors de l\'association à un déclencheur, on attribue à chaque action un numé
 	'UI:Button:ResetImage' => 'Récupérer l\'image initiale',
 	'UI:Button:RemoveImage' => 'Supprimer l\'image',
 	'UI:UploadNotSupportedInThisMode' => 'La modification d\'images ou de fichiers n\'est pas supportée dans ce mode.',
+
+	'UI:Button:RemoveDocument' => 'Supprimer le document',
 
 	// Search form
 	'UI:Search:Toggle' => 'Réduire / Ouvrir',

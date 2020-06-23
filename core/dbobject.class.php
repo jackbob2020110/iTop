@@ -2914,9 +2914,9 @@ abstract class DBObject implements iDisplay
 		}
 	}
 
-	/*
-	* Persist an object to the DB, for the first time
-	*
+	/**
+	 * Persist an object to the DB, for the first time
+	 *
      * @api
      * @see DBWrite
      *
@@ -3695,21 +3695,38 @@ abstract class DBObject implements iDisplay
 	 */
 	public function ApplyStimulus($sStimulusCode, $bDoNotWrite = false)
 	{
-		$sStateAttCode = MetaModel::GetStateAttributeCode(get_class($this));
+		$sClass = get_class($this);
+		$sStateAttCode = MetaModel::GetStateAttributeCode($sClass);
 		if (empty($sStateAttCode))
 		{
-			throw new CoreException('No lifecycle for the class '.get_class($this));
+			throw new CoreException('No lifecycle for the class '.$sClass);
 		}
 
-		MyHelpers::CheckKeyInArray('object lifecycle stimulus', $sStimulusCode, MetaModel::EnumStimuli(get_class($this)));
+		MyHelpers::CheckKeyInArray('object lifecycle stimulus', $sStimulusCode, MetaModel::EnumStimuli($sClass));
 
 		$aStateTransitions = $this->EnumTransitions();
 		if (!array_key_exists($sStimulusCode, $aStateTransitions))
 		{
-			// This simulus has no effect in the current state... do nothing
-			IssueLog::Error(get_class($this).": Transition $sStimulusCode is not allowed in ".$this->Get($sStateAttCode));
+			// This stimulus has no effect in the current state... do nothing
+			IssueLog::Error("$sClass: Transition $sStimulusCode is not allowed in ".$this->Get($sStateAttCode));
 			return false;
 		}
+
+		// save current object values in case of an action failure (in memory rollback)
+		$aBackupValues = array();
+		foreach(MetaModel::ListAttributeDefs($sClass) as $sAttCode => $oAttDef)
+		{
+			$value = $this->m_aCurrValues[$sAttCode];
+			if (is_object($value))
+			{
+				$aBackupValues[$sAttCode] = clone $value;
+			}
+			else
+			{
+				$aBackupValues[$sAttCode] = $value;
+			}
+		}
+
 		$aTransitionDef = $aStateTransitions[$sStimulusCode];
 
 		// Change the state before proceeding to the actions, this is necessary because an action might
@@ -3728,11 +3745,11 @@ abstract class DBObject implements iDisplay
 			{
 				// Old (pre-2.1.0 modules) action definition without any parameter
 				$aActionCallSpec = array($this, $actionHandler);
-				$sActionDesc = get_class($this).'::'.$actionHandler;
+				$sActionDesc = $sClass.'::'.$actionHandler;
 
 				if (!is_callable($aActionCallSpec))
 				{
-					throw new CoreException("Unable to call action: ".get_class($this)."::$actionHandler");
+					throw new CoreException("Unable to call action: $sClass::$actionHandler");
 				}
 				$bRet = call_user_func($aActionCallSpec, $sStimulusCode);
 			}
@@ -3740,7 +3757,7 @@ abstract class DBObject implements iDisplay
 			{
 				// New syntax: 'verb' and typed parameters
 				$sAction = $actionHandler['verb'];
-				$sActionDesc = get_class($this).'::'.$sAction;
+				$sActionDesc = "$sClass::$sAction";
 				$aParams = array();
 				foreach($actionHandler['params'] as $aDefinition)
 				{
@@ -3776,14 +3793,12 @@ abstract class DBObject implements iDisplay
 			// (in case there is no returned value, null is obtained and means "ok")
 			if ($bRet === false)
 			{
-				IssueLog::Info("Lifecycle action $sActionDesc returned false on object #".$this->GetKey());
+				IssueLog::Info("Lifecycle action $sActionDesc returned false on object #$sClass:".$this->GetKey());
 				$bSuccess = false;
 			}
 		}
 		if ($bSuccess)
 		{
-			$sClass = get_class($this);
-
 			// Stop watches
 			foreach(MetaModel::ListAttributeDefs($sClass) as $sAttCode => $oAttDef)
 			{
@@ -3826,6 +3841,14 @@ abstract class DBObject implements iDisplay
 				$oTrigger->DoActivate($this->ToArgs('this'));
 			}
 		}
+		else
+		{
+			// At least one action failed, rollback the object value to its previous value
+			foreach(MetaModel::ListAttributeDefs($sClass) as $sAttCode => $oAttDef)
+			{
+				$this->m_aCurrValues[$sAttCode] = $aBackupValues[$sAttCode];
+			}
+		}
 
 		return $bSuccess;
 	}
@@ -3851,7 +3874,32 @@ abstract class DBObject implements iDisplay
 	 */	 	
 	public function Copy($sDestAttCode, $sSourceAttCode)
 	{
-		$this->Set($sDestAttCode, $this->Get($sSourceAttCode));
+		$oTypeValueToCopy = MetaModel::GetAttributeDef(get_class($this), $sSourceAttCode);
+		$oTypeValueDest = MetaModel::GetAttributeDef(get_class($this), $sDestAttCode);
+		if ($oTypeValueToCopy instanceof AttributeText && $oTypeValueDest instanceof AttributeText)
+		{
+			if ($oTypeValueToCopy->GetFormat() == $oTypeValueDest->GetFormat())
+			{
+				$sValueToCopy = $this->Get($sSourceAttCode);
+			}
+			else
+			{
+				if ($oTypeValueToCopy->GetFormat() == 'text')// and $oTypeValueDest->GetFormat()=='HTML'
+				{
+					$sValueToCopy = $this->GetAsHTML($sSourceAttCode);
+				}
+				else
+				{// $oTypeValueToCopy->GetFormat() == 'HTML' and $oTypeValueDest->GetFormat()=='Text'
+					$sValueToCopy = utils::HtmlToText($this->Get($sSourceAttCode));
+				}
+			}
+		}
+		else
+		{
+			$sValueToCopy = $this->Get($sSourceAttCode);
+		}
+		$this->Set($sDestAttCode, $sValueToCopy);
+
 		return true;
 	}
 
@@ -5209,10 +5257,6 @@ abstract class DBObject implements iDisplay
 					throw new Exception('Missing argument #1: stimulus');
 				}
 				$sStimulus = $aParams[0];
-				if (!in_array($sStimulus, MetaModel::EnumStimuli(get_class($this))))
-				{
-					throw new Exception("Unknown stimulus ".get_class($this)."::".$sStimulus);
-				}
 				$this->ApplyStimulus($sStimulus);
 				break;
 

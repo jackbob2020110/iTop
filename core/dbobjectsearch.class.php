@@ -313,6 +313,11 @@ class DBObjectSearch extends DBSearch
 		return true;
 	}
 
+	/**
+	 * Move conditions from $oFilter to $this
+	 * @param \DBSearch $oFilter
+	 * @param $aTranslation
+	 */
 	protected function TransferConditionExpression($oFilter, $aTranslation)
 	{
 		// Prevent collisions in the parameter names by renaming them if needed
@@ -335,6 +340,7 @@ class DBObjectSearch extends DBSearch
 		$oTranslated = $oFilter->GetCriteria()->Translate($aTranslation, false, false /* leave unresolved fields */);
 		$this->AddConditionExpression($oTranslated);
 		$this->m_aParams = array_merge($this->m_aParams, $oFilter->m_aParams);
+		$oFilter->ResetCondition();
 	}
 
 	public function RenameParam($sOldName, $sNewName)
@@ -522,6 +528,8 @@ class DBObjectSearch extends DBSearch
 	}
 
 	/**
+	 * Helper method for IN / NOT IN conditions : values won't be parsed in the expression tree, that will save some time !
+	 *
 	 * @param string $sFilterCode attribute code to use
 	 * @param array $aValues
 	 * @param bool $bPositiveMatch if true will add a IN filter, else a NOT IN
@@ -632,7 +640,10 @@ class DBObjectSearch extends DBSearch
 
 		$oNewCond = new BinaryExpression($oTextFields, 'LIKE', $oFlexNeedle);
 		$this->AddConditionExpression($oNewCond);
-		$this->m_aParams[$sQueryParam] = $sNeedle;
+		//replace in order to search the character "_" ("_" in mysql is like "%" for only one character).
+		$sFullText = str_replace('_', '\_', $sNeedle);
+
+		$this->m_aParams[$sQueryParam] = $sFullText;
 	}
 
 	protected function AddToNameSpace(&$aClassAliases, &$aAliasTranslation, $bTranslateMainAlias = true)
@@ -1036,7 +1047,7 @@ class DBObjectSearch extends DBSearch
 	public function Filter($sClassAlias, DBSearch $oFilter)
 	{
 		// If the conditions are the correct ones for Intersect
-		if (($this->GetFirstJoinedClass() == $oFilter->GetFirstJoinedClass()))
+		if (MetaModel::IsParentClass($oFilter->GetFirstJoinedClass(),$this->GetFirstJoinedClass()))
 		{
 			return $this->Intersect($oFilter);
 		}
@@ -1068,7 +1079,6 @@ class DBObjectSearch extends DBSearch
 	{
 		if (($oSearch->GetFirstJoinedClassAlias() == $sClassAlias))
 		{
-			$oSearch->ResetCondition();
 			$oSearch = $oSearch->IntersectSubClass($oFilter, $aRootClasses);
 			return $oSearch->GetCriteria();
 		}

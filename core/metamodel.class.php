@@ -4127,44 +4127,52 @@ abstract class MetaModel
 	 *
 	 * @param array $aArgs Context arguments (some can be persistent objects)
 	 * @param array $aMoreArgs Other query parameters
+	 * @param array $aExpectedArgs variables present in the query
+	 *
 	 * @return array
 	 */
-	public static function PrepareQueryArguments($aArgs, $aMoreArgs = array())
+	public static function PrepareQueryArguments($aArgs, $aMoreArgs = array(), $aExpectedArgs = null)
 	{
 		$aScalarArgs = array();
-		foreach(array_merge($aArgs, $aMoreArgs) as $sArgName => $value)
+		if (is_null($aExpectedArgs) || count($aExpectedArgs) > 0 || count($aMoreArgs)>0)
 		{
-			if (self::IsValidObject($value))
+			foreach (array_merge($aArgs, $aMoreArgs) as $sArgName => $value)
 			{
-				if (strpos($sArgName, '->object()') === false)
+				if (self::IsValidObject($value))
 				{
-					// Normalize object arguments
-					$aScalarArgs[$sArgName.'->object()'] = $value;
+					if (strpos($sArgName, '->object()') === false)
+					{
+						// Normalize object arguments
+						$aScalarArgs[$sArgName.'->object()'] = $value;
+						}
+					else
+					{
+						// Leave as is
+						$aScalarArgs[$sArgName] = $value;
+					}
 				}
 				else
 				{
-					// Leave as is
-					$aScalarArgs[$sArgName] = $value;
+					if (is_scalar($value))
+					{
+						$aScalarArgs[$sArgName] = (string)$value;
+					}
+					elseif (is_null($value))
+					{
+						$aScalarArgs[$sArgName] = null;
+					}
+					elseif (is_array($value))
+					{
+						$aScalarArgs[$sArgName] = $value;
+					}
 				}
 			}
-			else
-			{
-				if (is_scalar($value))
-				{
-					$aScalarArgs[$sArgName] = (string)$value;
-				}
-				elseif (is_null($value))
-				{
-					$aScalarArgs[$sArgName] = null;
-				}
-				elseif (is_array($value))
-				{
-					$aScalarArgs[$sArgName] = $value;
-				}
-			}
+			return static::AddMagicPlaceholders($aScalarArgs, $aExpectedArgs);
 		}
-
-		return static::AddMagicPlaceholders($aScalarArgs);
+		else
+		{
+			return array();
+		}
 	}
 
 	/**
@@ -4172,21 +4180,68 @@ abstract class MetaModel
 	 *
 	 * @return array of placeholder (or name->object()) => value (or object)
 	 */
-	public static function AddMagicPlaceholders($aPlaceholders)
+	public static function AddMagicPlaceholders($aPlaceholders, $aExpectedArgs = null)
 	{
 		// Add standard magic arguments
 		//
-		$aPlaceholders['current_contact_id'] = UserRights::GetContactId(); // legacy
-
-		$oUser = UserRights::GetUserObject();
-		if (!is_null($oUser))
+		if (is_null($aExpectedArgs))
 		{
-			$aPlaceholders['current_user->object()'] = $oUser;
+			$aPlaceholders['current_contact_id'] = UserRights::GetContactId(); // legacy
 
-			$oContact = UserRights::GetContactObject();
-			if (!is_null($oContact))
+			$oUser = UserRights::GetUserObject();
+			if (!is_null($oUser))
 			{
-				$aPlaceholders['current_contact->object()'] = $oContact;
+				$aPlaceholders['current_user->object()'] = $oUser;
+
+				$oContact = UserRights::GetContactObject();
+				if (!is_null($oContact))
+				{
+					$aPlaceholders['current_contact->object()'] = $oContact;
+				}
+			}
+		}
+		else
+		{
+			$aCurrentUser = array();
+			$aCurrentContact = array();
+			foreach ($aExpectedArgs as $expression)
+			{
+				$aName = explode('->', $expression->GetName());
+				if ($aName[0] == 'current_contact_id')
+				{
+					$aPlaceholders['current_contact_id'] = UserRights::GetContactId();
+				}
+				if ($aName[0] == 'current_user')
+				{
+					array_push($aCurrentUser, $aName[1]);
+				}
+				if ($aName[0] == 'current_contact')
+				{
+					array_push($aCurrentContact, $aName[1]);
+				}
+			}
+			if (count($aCurrentUser) > 0)
+			{
+				$oSearch = DBObjectSearch::FromOQL("SELECT User WHERE id = :id");
+				$oSet = new DBObjectSet($oSearch, array(), array('id' => UserRights::GetUserId()));
+				$oSet->OptimizeColumnLoad($aCurrentUser);
+				$oUser = $oSet->fetch();
+				$aPlaceholders['current_user->object()'] = $oUser;
+				foreach ($aCurrentUser as $sField)
+				{
+					$aPlaceholders['current_user->'.$sField] = $oUser->Get($sField);
+				}
+			}
+			if (count($aCurrentContact) > 0)
+			{
+				$oSearch = DBObjectSearch::FromOQL("SELECT Contact WHERE id = :id");
+				$oSet = new DBObjectSet($oSearch, array(), array('id' => UserRights::GetContactId()));
+				$oSet->OptimizeColumnLoad($aCurrentContact);
+				$oUser = $oSet->fetch();
+				foreach ($aCurrentContact as $sField)
+				{
+					$aPlaceholders['current_contact->'.$sField] = $oUser->Get($sField);
+				}
 			}
 		}
 
@@ -5692,6 +5747,15 @@ abstract class MetaModel
 		{
 			$sTableItems = implode(', ', $aCreateTableItems[$sTable]);
 			$aCondensedQueries[] = "CREATE TABLE `$sTable` ($sTableItems) $sTableOptions";
+			// Add request right after the CREATE TABLE
+			if (isset($aPostTableAlteration[$sTable]))
+			{
+				foreach ($aPostTableAlteration[$sTable] as $sQuery)
+				{
+					$aCondensedQueries[] = $sQuery;
+				}
+				unset($aPostTableAlteration[$sTable]);
+			}
 		}
 		foreach ($aAlterTableMetaData as $sTableAlterQuery)
 		{
@@ -5708,7 +5772,17 @@ abstract class MetaModel
 				{
 					$aCondensedQueries[] = $sQuery;
 				}
+				unset($aPostTableAlteration[$sTable]);
             }
+		}
+
+		// Add alterations not yet managed
+		foreach ($aPostTableAlteration as $aQueries)
+		{
+			foreach ($aQueries as $sQuery)
+			{
+				$aCondensedQueries[] = $sQuery;
+			}
 		}
 
 		return array($aErrors, $aSugFix, $aCondensedQueries);
@@ -6316,6 +6390,7 @@ abstract class MetaModel
 			self::$m_bLogWebService = self::$m_oConfig->GetLogWebService();
 
 			ToolsLog::Enable(APPROOT.'log/tools.log');
+			DeadLockLog::Enable();
 		}
 		else
 		{
